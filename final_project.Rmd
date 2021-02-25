@@ -1,0 +1,382 @@
+---
+title: "Spotify Songs - Data Analysis"
+author: "Dalia Smyrnov and Shir keynan"
+date: "July 2020"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+spotify_songs <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-01-21/spotify_songs.csv')
+#view(spotify_songs)
+```
+
+![](https://i.insider.com/5e3aab1f5bc79c18ab190ba2?width=1100&format=jpeg&auto=webp)
+
+# Introduction
+In this research we will concentrate on the spotify songs data set.  
+This dataset comes from Spotify via the spotifyr package, and it contains
+a lot of interesting information about the songs such as: popularity, danceability, key, etc.
+
+We will focus on:  
+1. Tidy our dataset.  
+2. Visualizations.  
+3. Statstical Models and methods learned during the course.  
+
+So, our goals is to demonstrate and practice the different methods which we have been learnd about in the course by examining the relationship between the different variables from the spotify songs dataset.
+
+The methods which we will use in this research are:  
+1. Hypothesis test.  
+2. Model of multiple regression. 
+
+# Part One - Data Import And Tidying
+```{r}
+library(tidyverse) #main package
+library(prettydoc) #design
+library(gridExtra) #for grid.arrange
+library(ggcorrplot) #for correlation plot
+```
+
+The spotify songs data set is taken from [tidytuesday](https://github.com/rfordatascience/tidytuesday) and [spotifyr package](https://cran.r-project.org/src/contrib/Archive/spotifyr/) which based on the data from [Spotifys' API](https://developer.spotify.com/documentation/web-api/). The data comes in a [CSV file](https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-01-21/spotify_songs.csv).  
+lets read this file with ```read.csv``` function that imports the data into R.
+```{r}
+spotify_songs <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-01-21/spotify_songs.csv')
+```
+
+first, we need to get to know our data set.  
+for this purpose we will look at our data set briefly, with ```glimpse()``` function.
+
+```{r}
+glimpse(spotify_songs)
+```
+
+Here is a table which contains description about every data type, including theorethical and numeric scale explanations:
+
+variable                  class     description 
+------------------------  --------- -----------  
+track_id                  character Song unique ID
+track_name                character Song Name
+track_artist              character Song Artist
+track_popularity          double    Song Popularity (0-100) where higher is better
+track_album_id            character Album unique ID
+track_album_name          character Song album name
+track_album_release_date  character Date when album released
+playlist_name             character Name of playlist
+playlist_id               character Playlist ID
+playlist_genre            character Playlist genre
+playlist_subgenre         character Playlist subgenre
+danceability              double    Danceability describes how suitable a track is for dancing based on a combination of musical elements including tempo, rhythm stability, beat strength, and overall regularity. A value of 0.0 is least danceable and 1.0 is most danceable.
+energy                    double    Energy is a measure from 0.0 to 1.0 and represents a perceptual measure of intensity and activity. Typically, energetic tracks feel fast, loud, and noisy. For example, death metal has high energy, while a Bach prelude scores low on the scale. Perceptual features contributing to this attribute include dynamic range, perceived loudness, timbre, onset rate, and general entropy.
+key                       double    The estimated overall key of the track. Integers map to pitches using standard Pitch Class notation . E.g. 0 = C, 1 = C♯/D♭, 2 = D, and so on. If no key was detected, the value is -1.
+loudness                  double    	The overall loudness of a track in decibels (dB). Loudness values are averaged across the entire track and are useful for comparing relative loudness of tracks. Loudness is the quality of a sound that is the primary psychological correlate of physical strength (amplitude). Values typical range between -60 and 0 db.
+mode                      double    Mode indicates the modality (major or minor) of a track, the type of scale from which its melodic content is derived. Major is represented by 1 and minor is 0.
+speechiness               double    Speechiness detects the presence of spoken words in a track. The more exclusively speech-like the recording (e.g. talk show, audio book, poetry), the closer to 1.0 the attribute value. Values above 0.66 describe tracks that are probably made entirely of spoken words. Values between 0.33 and 0.66 describe tracks that may contain both music and speech, either in sections or layered, including such cases as rap music. Values below 0.33 most likely represent music and other non-speech-like tracks.
+acousticness              double     A confidence measure from 0.0 to 1.0 of whether the track is acoustic. 1.0 represents high confidence the track is acoustic.
+instrumentalness          double     	Predicts whether a track contains no vocals. “Ooh” and “aah” sounds are treated as instrumental in this context. Rap or spoken word tracks are clearly “vocal”. The closer the instrumentalness value is to 1.0, the greater likelihood the track contains no vocal content. Values above 0.5 are intended to represent instrumental tracks, but confidence is higher as the value approaches 1.0.
+liveness                  double      Detects the presence of an audience in the recording. Higher liveness values represent an increased probability that the track was performed live. A value above 0.8 provides strong likelihood that the track is live.
+valence                   double      A measure from 0.0 to 1.0 describing the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry).
+tempo                     double      The overall estimated tempo of a track in beats per minute (BPM). In musical terminology, tempo is the speed or pace of a given piece and derives directly from the average beat duration.
+duration_ms               double      Duration of song in milliseconds.
+
+From our perspective, there are some problems with this data set:  
+(1) Different playlists can contain the same song, which creates duplications in our data set. also, it can cause different genres for one song.  
+(2) The duration of song represented by miliseconds. it is unconvenient way of time representing.  
+(3) The release date of song looks like: year-month-day. it is problematic representation for us to analyse the data in this way.
+  
+**Solutions**: We will delete duplicated song and all the data related to playlists. moreover, we wil convert the duration from miliseconds to minutes. also, we will create a new colomn contains information about year and month, seperatly.
+
+```{r}
+#delete all the information related to the playlists
+spotify_songs$playlist_name <- NULL
+spotify_songs$playlist_genre <- NULL
+spotify_songs$playlist_id <- NULL
+spotify_songs$playlist_subgenre <- NULL
+
+#drop all duplicated tracks
+tidy_spotify <- spotify_songs[!duplicated(spotify_songs$track_id),]
+tidy_spotify <- spotify_songs[!duplicated(spotify_songs$track_name),]
+
+#convertion of the song duration from miliseconds to minutes
+spotify_songs <- mutate(spotify_songs,
+       dur_min = duration_ms*(10^(-5)))
+tidy_spotify <- mutate(tidy_spotify,
+       dur_min = duration_ms*(10^(-5)))
+
+#delete the duration in miliseconds from the dataset
+tidy_spotify$duration_ms <- NULL
+
+#tidy tha release date (year and month)
+year_cut <- substring(tidy_spotify$track_album_release_date, 0, 4)
+month_cut <- substring(tidy_spotify$track_album_release_date, 6, 7)
+tidy_spotify <- tidy_spotify %>%
+  mutate(year = year_cut)
+```
+
+Also, we will focos on songs which publised after 2000's and are longer than two minutes.
+
+```{r}
+#reduction of the data: we interested in songs above 30 sec of duration
+#                      and songs which published after 2000
+tidy_spotify <- tidy_spotify %>% filter(dur_min > 2)
+tidy_spotify <- tidy_spotify %>% filter(year >= 2000)
+```
+
+
+# Part Two - Visualizations
+In this part we will examine our data through differrent graphs and plot with [ggplot2 package](https://www.rdocumentation.org/packages/ggplot2/versions/3.3.1).
+
+### 1. The distributions of diffrenent variables
+```{r}
+dance_dist <- ggplot(tidy_spotify, aes(x=danceability)) +
+  geom_histogram(bins=20, fill="honeydew3")
+
+energy_dist <- ggplot(tidy_spotify, aes(x=energy)) +
+  geom_histogram(bins=20, fill="honeydew3")
+
+loudness_dist <- ggplot(tidy_spotify, aes(x=loudness)) +
+  geom_histogram(bins=20, fill="honeydew3")
+
+valence_dist <- ggplot(tidy_spotify, aes(x=valence)) +
+  geom_histogram(bins=20, fill="honeydew3")
+
+grid.arrange(dance_dist, energy_dist,loudness_dist,valence_dist)
+```
+
+As we can see, the danceability and valence remind a little the shape of normal distribution, but it is not accurate.
+
+### 2. The density of diffrenent variables
+```{r}
+spotify_density <- ggplot(tidy_spotify) +
+    geom_density(aes(energy, fill ="energy", alpha = 0.1)) + 
+    geom_density(aes(danceability, fill ="danceability", alpha = 0.1)) + 
+    geom_density(aes(valence, fill ="valence", alpha = 0.1)) + 
+    geom_density(aes(acousticness, fill ="acousticness", alpha = 0.1)) + 
+    geom_density(aes(speechiness, fill ="speechiness", alpha = 0.1)) + 
+    geom_density(aes(liveness, fill ="liveness", alpha = 0.1)) + 
+    scale_x_continuous(name = "Variables") +
+    scale_y_continuous(name = "Density") +
+    ggtitle("Density plot of Energy, Danceability, Valence, Acousticness, Speechiness and Liveness") +
+      scale_fill_brewer(palette="PRGn")
+
+spotify_density
+
+```
+
+
+### 3. QQplot  
+Although some of the variables appear to be "normal", we can be more confident about this statement if we wiil check it with the ```qqplot``` graph.
+(which is a graphical method for comparing two probability distributions by plotting their quantiles against each other.)  
+If the variable distributes normally, we will see a Clear diagonal line.
+```{r}
+dance_qq <- ggplot(tidy_spotify, aes(sample=danceability)) +
+  geom_qq(color = "honeydew3") + geom_qq_line(col="red") +
+    labs(x= "danceability")
+
+energy_qq <- ggplot(tidy_spotify, aes(sample=energy)) +
+  geom_qq(color = "honeydew3") + geom_qq_line(col="red") +
+  labs(x= "energy")
+
+loudness_qq <- ggplot(tidy_spotify, aes(sample=loudness)) +
+  geom_qq(color = "honeydew3") + geom_qq_line(col="red") +
+  labs(x= "loudness")
+
+valence_qq <- ggplot(tidy_spotify, aes(sample=valence)) +
+  geom_qq(color = "honeydew3") + geom_qq_line(col="red") +
+  labs(x = "valence")
+
+grid.arrange(dance_qq,energy_qq,loudness_qq,valence_qq)
+```
+
+Again, danceability is looks the most close to be normal, but it is not accurate.
+
+### 4. Histogram of duration of different songs
+```{r}
+min_hist <- ggplot(spotify_songs, aes(dur_min))+
+  geom_histogram(fill = "honeydew3")
+
+min_boxplot <- ggplot(spotify_songs, aes(dur_min))+
+  geom_boxplot(fill = "honeydew3")
+
+mean(spotify_songs$dur_min)
+
+grid.arrange(min_hist, min_boxplot)
+```
+
+Here we can see a histogram which show us that the duration of most of the songs is around two minutes. we can see it more clearly in the boxplot, where the mean is 2.258.  
+
+# Part Three - Modeling
+## First Model - Paired test
+**Paired samples** (also called dependent samples) are samples in which natural or matched couplings occur. This generates a data set in which each data point in one sample is uniquely paired to a data point in the second sample.
+
+We noticed that there are two different groups for the same song - remix, and the original song.  
+We wanted to be able to compare the differences values between the two versions.
+for this purpose we used [python pandas package](https://pandas.pydata.org/docs/) :
+
+```
+spot.drop(['playlist_name', 'playlist_id','playlist_genre','playlist_subgenre'], axis=1, inplace=True)
+#Drop duplicates under 'Track_name'
+spot.drop_duplicates(subset = ['track_name'])
+spot['track_name'] = spot['track_name'].str.lower()
+spot['track_name'] = spot['track_name'].str.replace('mix','remix')
+
+remix = spot[spot['track_name'].str.contains("remix",na=False)].copy()
+original = spot[~spot['track_name'].str.contains("remix",na=False)].copy()
+
+remix['track_name_edited'] = remix['track_name'].str.replace('Remix','') #Remove "Remix" from track name
+remix['track_name_edited'] = remix['track_name'].str.replace('remix','') #Remove "remix" from track name
+remix['track_name_edited'] = remix['track_name'].str.lower() #Change track name to lower case
+
+remix['track_name_edited'] = remix['track_name_edited'].str.split('-').str[0] #Remove anything after "-"
+remix['track_name_edited'] = remix['track_name_edited'].str.split('(').str[0] #Remove anything after "("
+remix['track_name_edited'] = remix['track_name_edited'].str.split('[').str[0] #Remove anything after "["
+remix.drop_duplicates(subset = ['track_name_edited'])
+#####
+
+original['track_name_edited'] = original['track_name'].str.lower() #Change track name to lower case
+
+original['track_name_edited'] = original['track_name_edited'].str.split('-').str[0] #Remove anything after "-"
+original['track_name_edited'] = original['track_name_edited'].str.split('(').str[0] #Remove anything after "("
+original['track_name_edited'] = original['track_name_edited'].str.split('[').str[0] #Remove anything after "["
+
+
+original.drop(['track_popularity','track_album_id','track_album_name','track_album_release_date'], axis=1, inplace=True)
+remix.drop(['track_id','track_popularity','track_album_id','track_album_name','track_album_release_date'], axis=1, inplace=True)
+remix.drop(['mode','loudness','duration_ms','tempo','key'], axis=1, inplace=True)
+original.drop(['track_id','mode','loudness','duration_ms','tempo','key'], axis=1, inplace=True)
+original.drop_duplicates(subset = ['track_name_edited'])
+
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_rows', None)
+
+original.drop_duplicates(subset = ['track_name_edited'])
+remix.drop_duplicates(subset = ['track_name_edited'])
+a = pd.merge(remix, original.drop_duplicates(subset=['track_name_edited'], keep='first'), on= ['track_name_edited','track_artist'],how='left')
+a = a.dropna()
+a.drop(['track_name_x','instrumentalness_x','acousticness_x','liveness_x','speechiness_x'], axis=1, inplace=True)
+a.drop(['track_name_y','instrumentalness_y','acousticness_y','liveness_y','speechiness_y'], axis=1, inplace=True)
+a.drop(['danceability_x','valence_x','danceability_y','valence_y'], axis=1, inplace=True)
+a.rename(columns={'track_name_edited' : 'track_name', 'energy_x' : 'energy_remix','energy_y' : 'energy_regular'})
+
+a.to_csv(r"C:\Statistics\remix_new.csv")
+```
+
+We open our new csv files with ```read.csv``` command:
+```{r}
+paired_energy<-read.csv("remix_new.csv")
+paired_speechines<-read.csv("speechenes.csv")
+```
+
+### Paired t.test for energy of the song
+$H_0$ : remix version values and regular version values are the same.  
+$H_1$ : remix version values are higher than regular version values.
+
+We use paired t-test, because each song is compared to itself.  
+
+```{r}
+boxplot(paired_energy$Energy_Regular, paired_energy$Energy_Remix,
+        names = c("Regular", "Remix"))
+```
+
+```{r}
+t.test(x = paired_energy$Energy_Remix,
+       y = paired_energy$Energy_Regular,
+       paired = TRUE, alternative = "greater")
+```
+
+**Conclusion:** as we can see, there are difference in means of the two versions, so we reject the null hypothesis and we conclude that the energy of the remix version is higher.
+
+Let's make another paired t.test.
+
+### Paired t.test for speechines of the song
+$H_0$ : remix version values and regular version values are the same.  
+$H_1$ : remix version values are lesser than regular version values.
+
+```{r}
+boxplot(paired_speechines$speechiness_y,paired_speechines$speechiness_x,
+        names = c("Regular", "Remix"))
+```
+
+```{r}
+t.test(x = paired_speechines$speechiness_x,
+       y = paired_speechines$speechiness_y,
+       paired = TRUE, alternative = "less")
+```
+
+**conclusion:** We thought that in the remix versions there will be less spoken words, but in the t.test we realized that the differences between the two versions are insignificant (mean of the differences = 0.008059722).
+
+
+## Second Model - Multiple Regression
+
+Let's start with correlation check. correlation is interesting because it can help us find simple association rules between variables. The values range between -1.0 (negative correlation) and 1.0 (positive correlation).  
+
+```{r}
+
+numeric_tidy <- tidy_spotify %>% select(danceability,energy,valence,speechiness,acousticness
+                              ,liveness,tempo,loudness,instrumentalness)
+
+corr_data <- cor(numeric_tidy)
+
+ggcorrplot(corr_data, hc.order = TRUE, type = "upper",
+   outline.col = "white",
+   ggtheme = ggplot2::theme_gray,
+   colors = c("darkolivegreen2", "white", "darkolivegreen"))
+```
+
+We can see, that there is a strong positive correlation between energy and loudness. also, there is some negative correlation between loudness, energy and acousticness (it make sense!).  
+Here is a demonstration of this:
+
+```{r}
+energy_loudness <- ggplot(tidy_spotify, aes(x=energy, y=loudness)) +
+  stat_smooth(col="honeydew3")
+acousticness_loudness <- ggplot(tidy_spotify, aes(x=acousticness, y=loudness)) +
+  stat_smooth(col="honeydew3")
+acousticness_energy <-ggplot(tidy_spotify, aes(x=acousticness, y=energy)) +
+  stat_smooth(col="honeydew3")
+
+grid.arrange(energy_loudness, acousticness_loudness, acousticness_energy,
+             nrow = 1)
+```
+
+After we saw the correlation between different variables, We will examine the multiple regression model of loudness with loudness and acousticness, loudness and energy.
+
+```{r}
+#multiple regression
+multi <- lm(loudness~acousticness + energy,data=tidy_spotify)
+summary(multi)
+```
+
+Looking at the model summary, we can see that  Our Adjusted R-squared is pretty high. but what does it mean? adjusted R-squared is used to compare the goodness-of-fit for regression models that contain differing numbers of independent variables. So, how good is our model? Judging by the Adjusted R-squared, not too great.  
+But perhaps it is somewhat useful. Let’s look at the residuals:
+
+```{r}
+resid_plot<- multi %>% ggplot(aes(x=.fitted,y=.resid)) +
+  geom_point(alpha=0.1) + geom_hline(yintercept=0) +
+  labs(title="Residual Plot")
+resid_plot
+
+resid_qq<- multi %>% ggplot(aes(sample=.resid)) +
+  geom_qq() + geom_qq_line(col="red") +
+  labs(title="QQ Plot")
+resid_qq
+```
+
+There are two assumptions that must be:  
+ • residuals are homoscedastic.  
+ • residuals are distributed normally.  
+
+The residuals plot is looks homoscedastic.  
+However, the QQ plot shows that our residuals are not distributed normal throughout the range of samples.  
+Given the Adjusted R-squared and problematic distribution of residuals, the model we have created seems to be unsuitable for predicting models.
+
+# Part Four - Discussion and summary
+
+We have covered some techniques to manipulate or change the format of a dataframe. We have also created some basic plots such as boxplot, density, qqplot. There is much more we can do on this dataset.For instance, we can analyze the popularity of songs or artists, how popularity changes over time based on the music style. Thus, there is no limit to the exploratory data analysis process. We can approach the dataframe from a specific point of view depending on our needs. However, the techniques and operations are usually the same. So, it is better to practice with different kind of datasets.
+
+![](Spotify_img.png)
+
+Bonus :  
+• [spotify for developers](https://developer.spotify.com/)  
+• ["The Amazing Ways Spotify Uses Big Data, AI And Machine Learning To Drive Business Success"](https://www.forbes.com/sites/bernardmarr/2017/10/30/the-amazing-ways-spotify-uses-big-data-ai-and-machine-learning-to-drive-business-success/#43f99bda4bd2)
+

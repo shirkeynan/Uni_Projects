@@ -1,0 +1,4 @@
+תורידי אותם!
+install.packages("prettydoc")
+install.packages("gridExtra")
+install.packages("ggcorrplot")
